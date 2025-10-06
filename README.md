@@ -24,6 +24,19 @@ Model Training	Trains CNN-LSTM hybrid model on labeled datasets (e.g., FaceForen
 Prediction & Evaluation	Classifies media as real/fake and computes metrics like accuracy, precision, and F1-score.
 User Interface (Optional)	Simple web or CLI-based dashboard for uploading and analyzing files.
 
+🧬 Project Architecture
+flowchart TD
+    A[Input Video/Audio] --> B[Preprocessing]
+    B --> C[Feature Extraction]
+    C --> D[Deep Learning Models (CNN + LSTM)]
+    D --> E[Classification Layer]
+    E --> F[Fake / Real Prediction]
+    F --> G[Visualization & Confidence Report]
+
+
+
+
+
 🧰 Technologies Used
 Programming Languages
 
