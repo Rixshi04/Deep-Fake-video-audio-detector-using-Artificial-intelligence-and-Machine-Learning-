@@ -1,7 +1,7 @@
 import { toast } from "@/components/ui/use-toast";
 
 // API base URL - make sure this matches your Flask server's address
-const API_BASE_URL = 'http://192.168.1.39:5000';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 export interface TaskResponse {
   task_id: string;
