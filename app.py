@@ -1,14 +1,16 @@
 import os
 import uuid
-import json
-from flask import Flask, request, jsonify, url_for, send_from_directory, make_response
+from flask import Flask, request, jsonify, send_from_directory, make_response
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import threading
 import time
 
 # Import our detector functions
-from simple_deepfake_detector import predict_deepfake
+try:
+    from simple_deepfake_detector import predict_deepfake
+except ImportError:
+    predict_deepfake = None
 from audio_deepfake_detector import predict_audio_deepfake, check_audio_file
 
 app = Flask(__name__, static_folder='static')
@@ -61,7 +63,13 @@ def process_video_task(file_path, task_id, frames):
         # Update task status to processing
         tasks[task_id]['status'] = 'processing'
         
-        # Run the prediction
+        if predict_deepfake is None:
+            tasks[task_id]['status'] = 'error'
+            tasks[task_id]['error'] = (
+                'Video detector module is not available in this repository.'
+            )
+            return
+
         result = predict_deepfake(file_path, frames)
         
         # Update task with result
@@ -87,7 +95,7 @@ def process_video_task(file_path, task_id, frames):
         except Exception as e:
             print(f"Failed to delete file {file_path}: {str(e)}")
 
-def process_audio_task(file_path, task_id):
+def process_audio_task(file_path, task_id, base_url):
     """Background task to process the audio"""
     try:
         # Update task status to processing
@@ -108,7 +116,6 @@ def process_audio_task(file_path, task_id):
             tasks[task_id]['status'] = 'error'
             tasks[task_id]['error'] = result['error']
         else:
-            base_url = request.host_url.rstrip('/')
             spectrogram_url = f"{base_url}/static/{result.get('spectrogram_path', '')}"
             
             tasks[task_id]['status'] = 'completed'
@@ -237,7 +244,7 @@ def upload_audio():
         # Start processing in a background thread
         threading.Thread(
             target=process_audio_task,
-            args=(file_path, task_id),
+            args=(file_path, task_id, request.host_url.rstrip('/')),
             daemon=True
         ).start()
         
@@ -285,4 +292,4 @@ cleanup_thread.daemon = True
 cleanup_thread.start()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True) 
+    app.run(host='0.0.0.0', debug=False) 
