@@ -6,7 +6,10 @@ import cv2
 from PIL import Image, ImageTk
 
 # Import our detector functions
-from simple_deepfake_detector import predict_deepfake
+try:
+    from simple_deepfake_detector import predict_deepfake
+except ImportError:
+    predict_deepfake = None
 
 class DeepfakeDetectorApp:
     def __init__(self, root):
@@ -227,6 +230,10 @@ class DeepfakeDetectorApp:
     
     def analyze_video(self):
         """Analyze the selected video in a separate thread"""
+        if predict_deepfake is None:
+            self._show_error("Video detector module is not available in this repository.")
+            return
+
         if not self.video_path or not os.path.exists(self.video_path):
             messagebox.showerror("Error", "Please select a valid video file first")
             return
