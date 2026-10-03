@@ -124,53 +124,56 @@ def extract_features(audio_path, duration=5, sr=22050):
         raise ValueError(f"Error extracting features: {str(e)}")
 
 def predict_audio_deepfake(audio_path):
-    """Predict if an audio file contains a deepfake"""
-    # Use CPU for compatibility
+    """Run audio inference using trained weights.
+
+    The repository does not ship model weights by default. In that case,
+    fail explicitly instead of returning a fabricated prediction.
+    """
+    model_path = os.getenv(
+        "AUDIO_DEEPFAKE_MODEL_PATH",
+        os.path.join("models", "audio_deepfake_detector.pt"),
+    )
+
+    if not os.path.isfile(model_path):
+        return {
+            "error": (
+                "Audio model weights were not found. "
+                "Set AUDIO_DEEPFAKE_MODEL_PATH to a trained PyTorch checkpoint."
+            )
+        }
+
     device = torch.device("cpu")
-    
-    # Create and load model
     model = create_audio_model().to(device)
-    
-    # Set to evaluation mode
-    model.eval()
-    
+
     try:
-        # Extract features and get spectrogram path
+        checkpoint = torch.load(model_path, map_location=device, weights_only=True)
+        state_dict = checkpoint.get("state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
+        model.load_state_dict(state_dict)
+        model.eval()
+
         features, spectrogram_path = extract_features(audio_path)
-        features = features.unsqueeze(0).to(device)  # Add batch dimension
-        
-        # Extract additional audio features
+        features = features.unsqueeze(0).to(device)
         audio_features = extract_audio_features(audio_path)
-        
-        # Make prediction
+
         with torch.no_grad():
             outputs = model(features)
             probabilities = torch.softmax(outputs, dim=1)
             prediction = torch.argmax(probabilities, dim=1).item()
-            confidence = probabilities[0][prediction].item() * 100
-            
-            # For demonstration, let's set a threshold for random prediction
-            # In a real system, this would be based on actual model predictions
-            import random
-            prediction = random.randint(0, 1)  # 0 for REAL, 1 for FAKE
-            confidence = random.uniform(70, 95)  # Random confidence between 70-95%
-            
-            # Convert MFCCs to make it JSON serializable
-            if 'mfccs' in audio_features:
-                audio_features['mfccs'] = [float(x) for x in audio_features['mfccs']]
-            
-            result = {
-                'prediction': 'FAKE' if prediction == 1 else 'REAL',
-                'confidence': confidence,
-                'spectrogram_path': spectrogram_path,
-                'features': audio_features,
-                'message': generate_explanation(prediction, audio_features)
-            }
-            
-            return result
-    except Exception as e:
-        print(f"Error during audio prediction: {str(e)}")
-        return {'error': str(e)}
+            confidence = probabilities[0, prediction].item() * 100
+
+        audio_features["mfccs"] = [
+            float(value) for value in audio_features.get("mfccs", [])
+        ]
+
+        return {
+            "prediction": "FAKE" if prediction == 1 else "REAL",
+            "confidence": confidence,
+            "spectrogram_path": spectrogram_path,
+            "features": audio_features,
+            "message": generate_explanation(prediction, audio_features),
+        }
+    except Exception as exc:
+        return {"error": f"Audio model inference failed: {exc}"}
 
 def generate_explanation(prediction, features):
     """Generate a human-readable explanation based on the prediction and audio features"""
